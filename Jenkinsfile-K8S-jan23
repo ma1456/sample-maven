@@ -1,46 +1,41 @@
 pipeline {
     agent any
-
-    environment {
-        registry = "211223789150.dkr.ecr.us-east-1.amazonaws.com/my-docker-repo"
-    }
-    
+    tools {
+	    maven "3.9.1"
+	 	}
     stages {
         stage('Checkout') {
             steps {
-                checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/akannan1087/springboot-app']])
+                checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/ma1456/sample-maven.git']])
             }
         }
-        
-        stage ("build Jar") {
+       stage ("build Jar") {
             steps {
-                sh "mvn clean install"
+                sh "mvn clean package"
             }
         }
-        
-        stage ("Build image") {
+	stage('Upload'){
+            steps{
+                rtUpload (
+                 serverId:"jfrog" ,
+                  spec: '''{
+                   "files": [
+                      {
+                      "pattern": "*.jar",
+                      "target": "testing/"
+                      }
+                            ]
+                           }''',
+                        )
+               }
+         }
+	stage ('Publish build info') {
             steps {
-                script {
-                    docker.build registry
+                rtPublishBuildInfo (
+                    serverId: "jfrog"
+                 )
                 }
             }
+       
         }
-        
-        stage ("Push to ECR") {
-            steps {
-                sh "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 211223789150.dkr.ecr.us-east-1.amazonaws.com"
-                sh "docker push 211223789150.dkr.ecr.us-east-1.amazonaws.com/my-docker-repo:latest"
-                
-            }
-        }
-        
-        stage ("Deploy to K8S") {
-            steps {
-                withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'K8S', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                sh "kubectl apply -f eks-deploy-k8s.yaml"
-                    
-                }
-            }
-        }
-    }
-}
+  }
